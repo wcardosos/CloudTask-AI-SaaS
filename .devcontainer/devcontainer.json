@@ -58,6 +58,19 @@
   // pós-criação, que rodam como appuser).
   // ---------------------------------------------------------------------------
   "features": {
+    // common-utils: instala zsh + oh-my-zsh e define o zsh como shell padrão.
+    // POR QUÊ: o shell padrão (sh/bash) é cru; o zsh + oh-my-zsh trazem
+    // autocompletar, histórico melhor e um prompt informativo (ver .zshrc).
+    // Os plugins externos e o nosso .zshrc são aplicados no post-create.
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "installOhMyZsh": true,
+      "installOhMyZshConfig": true,
+      "configureZshAsDefaultShell": true,
+      "username": "appuser",
+      "upgradePackages": false
+    },
+
     // Git e GitHub CLI: commitar/abrir PRs de dentro do container.
     "ghcr.io/devcontainers/features/git:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
@@ -142,7 +155,9 @@
           "**/__pycache__": true,
           "**/.pytest_cache": true,
           "**/.ruff_cache": true
-        }
+        },
+        // Usa o zsh (com oh-my-zsh) no terminal integrado do VS Code.
+        "terminal.integrated.defaultProfile.linux": "zsh"
       }
     }
   },

@@ -49,4 +49,22 @@ node --version   || true
 cdk --version    || true
 docker --version || true
 
+echo "==> [post-create] Configurando o terminal (oh-my-zsh: plugins + tema)..."
+# Plugins externos (não vêm no oh-my-zsh). Clonados na pasta custom do omz.
+ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+if [ -d "$HOME/.oh-my-zsh" ]; then
+  git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions \
+    "$ZSH_CUSTOM/plugins/zsh-autosuggestions" 2>/dev/null \
+    || echo "AVISO: falha ao clonar zsh-autosuggestions"
+  git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting \
+    "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" 2>/dev/null \
+    || echo "AVISO: falha ao clonar zsh-syntax-highlighting"
+  # Aplica o nosso .zshrc (tema fino-time + plugins + atalhos do projeto).
+  # O repo está montado em /app; copiamos de lá.
+  cp /app/.devcontainer/.zshrc "$HOME/.zshrc" \
+    || echo "AVISO: não foi possível copiar o .zshrc do projeto"
+else
+  echo "AVISO: oh-my-zsh não encontrado (feature common-utils não instalou?)."
+fi
+
 echo "==> [post-create] Pronto. Lembre: 'kind' (Aula 6) roda no HOST, não aqui."
