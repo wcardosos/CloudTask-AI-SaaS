@@ -40,8 +40,11 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.pytest.ini_options]
-# Aula 1 ainda não tem testes; bloco preparado para a Aula 2/3.
-addopts = "-ra -q"
+# `-p no:warnings` desliga o "warnings summary" do pytest. POR QUÊ:
+# warnings de libs (ex.: Starlette pedindo o httpx2) não afetam os testes e
+# poluem a saída, confundindo o aluno. Para depurar warnings um dia, basta
+# remover `-p no:warnings`.
+addopts = "-ra -q -p no:warnings"
 testpaths = ["tests"]
 
 [tool.mypy]
