@@ -25,7 +25,7 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -63,6 +63,15 @@ def db_session(engine: Engine) -> Generator[Session, None, None]:
     """
     connection: Connection = engine.connect()
     transaction = connection.begin()
+
+    # TRUNCATE dentro da transação externa: o teste passa a ver as tabelas
+    # VAZIAS independentemente do que o aluno tenha criado pelo Swagger durante
+    # o desenvolvimento. POR QUÊ funciona sem afetar dev: o `rollback` no
+    # `finally` desfaz ESTE truncate junto com tudo o que o teste inseriu, então
+    # os dados de desenvolvimento permanecem intactos no banco.
+    # `RESTART IDENTITY` reinicia a sequência do id (cosmético; testes não
+    # dependem de id específico).
+    connection.execute(text("TRUNCATE TABLE tasks RESTART IDENTITY CASCADE"))
 
     SessionTesting = sessionmaker(
         bind=connection,
