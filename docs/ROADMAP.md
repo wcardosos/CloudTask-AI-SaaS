@@ -89,8 +89,8 @@ DELETE /tasks/{task_id}
 - `app/core/config.py` consumindo `.env`.
 - Variáveis: `DATABASE_URL`, `APP_ENV`, `SECRET_KEY`.
 - Documentação conceitual (sem provisionar AWS ainda):
-  - `docs/aws-networking.md` — VPC, subnets pública/privada, SG, IG, bastion host.
-  - `docs/security-model.md` — IAM, MFA, responsabilidade compartilhada, criptografia, LGPD.
+  - `docs/conceitos/aws-networking.md` — VPC, subnets pública/privada, SG, IG, bastion host.
+  - `docs/conceitos/security-model.md` — IAM, MFA, responsabilidade compartilhada, criptografia, LGPD.
 
 **Objetivo didático:** código e infraestrutura pensados juntos; nada de credenciais em código.
 
@@ -104,7 +104,7 @@ DELETE /tasks/{task_id}
 - Endpoint de upload + serviço `app/services/s3_service.py`.
 - Modo local simulado (`STORAGE_MODE=local`) para alunos sem AWS.
 - Pasta `local_uploads/` no `.gitignore`.
-- Docs: `docs/s3-efs-datalake.md`.
+- Docs: `docs/conceitos/s3-efs-datalake.md`.
 
 **Endpoints**
 ```

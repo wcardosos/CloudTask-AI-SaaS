@@ -5,7 +5,7 @@ Este projeto é um **mini SaaS de gerenciamento de tarefas** em Python + FastAPI
 > Se você está abrindo o repo pela primeira vez na semana 1, leia até o final desta página antes de pedir ajuda.
 
 > 🆕 **Nunca usou terminal, Docker ou AWS?** Comece pelo guia passo a passo
-> **do absoluto zero**: [`aws-academy-setup.md`](aws-academy-setup.md). Ele
+> **do absoluto zero**: [`praticas/00-setup-inicial-e-aws-academy.md`](praticas/00-setup-inicial-e-aws-academy.md). Ele
 > cobre instalação de todas as ferramentas e a configuração do AWS Academy.
 
 ---
@@ -152,8 +152,8 @@ Comandos específicos ficam no README de cada aula e em `docs/ecr-guide.md`, `in
 | Quero saber...                                | Vá em                                  |
 | --------------------------------------------- | -------------------------------------- |
 | O que cada aula entrega                       | [`ROADMAP.md`](ROADMAP.md)             |
-| Conceitos de VPC, IAM, segurança (aula 4)     | `aws-networking.md`, `security-model.md` (a partir da aula 4) |
-| S3, EFS e Data Lake (aula 5)                  | `s3-efs-datalake.md` (a partir da aula 5) |
+| Conceitos de VPC, IAM, segurança (aula 4)     | `conceitos/aws-networking.md`, `conceitos/security-model.md` (a partir da aula 4) |
+| S3, EFS e Data Lake (aula 5)                  | `conceitos/s3-efs-datalake.md` (a partir da aula 5) |
 | Como subir imagem para ECR (aula 7)           | `ecr-guide.md` (a partir da aula 7)    |
 | Custos AWS (aula 9)                           | `cost-explorer.md`, `aws-pricing-notes.md` |
 | Checklist LGPD e entrega final (aula 12)      | `lgpd-checklist.md`, `deployment-checklist.md` |

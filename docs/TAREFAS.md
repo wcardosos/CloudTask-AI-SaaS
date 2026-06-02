@@ -238,11 +238,11 @@ Separar configuração do código, nunca versionar credenciais, **expor a API co
 - [ ] Header **HSTS** somente quando `APP_ENV != development`, `max-age` modesto, **sem `preload`**.
 - [ ] `TrustedHostMiddleware` lendo `TRUSTED_HOSTS`.
 - [ ] HTTPS local **opcional** com **`mkcert`** (não `openssl` cru): CA local → sem aviso no browser.
-- [ ] `docs/https-tls.md` didático.
+- [ ] `docs/conceitos/https-tls.md` didático.
 
 **4. Documentação conceitual (criar em `docs/`)**
-- [ ] `docs/aws-networking.md`: VPC, subnet pública/privada, SG, IG, NAT, bastion + diagrama (Mermaid/ASCII).
-- [ ] `docs/security-model.md`: IAM, MFA, responsabilidade compartilhada, criptografia em repouso e **em trânsito** (liga com `https-tls.md`), boas práticas de credenciais, intro LGPD.
+- [ ] `docs/conceitos/aws-networking.md`: VPC, subnet pública/privada, SG, IG, NAT, bastion + diagrama (Mermaid/ASCII).
+- [ ] `docs/conceitos/security-model.md`: IAM, MFA, responsabilidade compartilhada, criptografia em repouso e **em trânsito** (liga com `https-tls.md`), boas práticas de credenciais, intro LGPD.
 
 > ⚠️ **Nada é provisionado na AWS nesta aula.** HTTPS em prod é exercitado de fato na Aula 8 (ALB + ACM no EKS). Aqui: configurar o app + documentar.
 
@@ -266,7 +266,7 @@ Separar configuração do código, nunca versionar credenciais, **expor a API co
 - `GET /health` responde sem tocar no banco; `GET /health/ready` reflete o estado real do PostgreSQL (200 up / 503 down).
 - Atrás de proxy com `FORCE_HTTPS=true`, **sem loop** de redirect (probes OK).
 - `git grep -i "password\|secret" app/` não retorna valores reais hardcoded.
-- `docs/aws-networking.md`, `docs/security-model.md`, `docs/https-tls.md` existem, completos e **comentados de forma didática**.
+- `docs/conceitos/aws-networking.md`, `docs/conceitos/security-model.md`, `docs/conceitos/https-tls.md` existem, completos e **comentados de forma didática**.
 
 ### Referências
 - [ROADMAP.md — Aula 4](ROADMAP.md)
@@ -301,7 +301,7 @@ Mostrar que arquivos **não devem ser armazenados dentro do container**. Apresen
   - `GET /uploads/{filename}` — devolve o arquivo (modo local) ou pré-assinado (modo S3).
 - [ ] Registrar o router em `app/main.py`.
 - [ ] Adicionar `local_uploads/` ao `.gitignore` (já está, confirme).
-- [ ] Criar `docs/s3-efs-datalake.md` explicando, de forma didática:
+- [ ] Criar `docs/conceitos/s3-efs-datalake.md` explicando, de forma didática:
   - Diferença entre **block storage**, **file storage (EFS)** e **object storage (S3)**.
   - Classes de armazenamento do S3 (Standard, IA, Glacier).
   - O que é um **Data Lake** e como o S3 se encaixa.
@@ -319,7 +319,7 @@ S3_BUCKET_NAME=cloudtask-ai-saas-uploads
 - Com `STORAGE_MODE=local`: upload e download funcionam usando o disco local.
 - Com `STORAGE_MODE=s3` e credenciais válidas: arquivo aparece no bucket.
 - Trocar de modo **não** exige alterar código, apenas o `.env`.
-- `docs/s3-efs-datalake.md` existe e está completo.
+- `docs/conceitos/s3-efs-datalake.md` existe e está completo.
 
 ### Referências
 - [ROADMAP.md — Aula 5](ROADMAP.md)

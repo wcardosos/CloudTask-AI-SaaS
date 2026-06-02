@@ -104,7 +104,7 @@ Guia rápido (passo a passo, comandos e pré-requisitos): [`docs/HOW_TO_USE.md`]
 
 **Nunca usou terminal, Docker ou AWS?** Comece pelo guia do absoluto zero —
 instalação de todas as ferramentas e configuração do AWS Academy Learner Lab:
-[`docs/aws-academy-setup.md`](docs/aws-academy-setup.md).
+[`docs/praticas/00-setup-inicial-e-aws-academy.md`](docs/praticas/00-setup-inicial-e-aws-academy.md).
 
 Resumo:
 
