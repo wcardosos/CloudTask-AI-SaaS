@@ -806,6 +806,19 @@ aws ec2 describe-network-interfaces --network-interface-ids $env:ENI_ID `
 > ⚠️ **`Public IP: ENABLED` / `--cidr 0.0.0.0/0` é didático**, NÃO usar em
 > produção real. Em produção: Fargate atrás de ALB, sem IP público.
 
+> 🩺 **Task presa em `PENDING` e nunca vira `RUNNING`?** A VPC default da conta
+> pode estar **sem Internet Gateway** (contas "limpas" às vezes perdem IGW e
+> subnets) — sem IGW o Fargate não alcança o ECR para puxar a imagem. Sintoma:
+> a rota `0.0.0.0/0` da route table aparece como **blackhole**. Recrie o IGW
+> (mexe em rede da VPC — rode com consciência):
+> ```bash
+> IGW_ID=$(aws ec2 create-internet-gateway --query 'InternetGateway.InternetGatewayId' --output text)
+> aws ec2 attach-internet-gateway --internet-gateway-id $IGW_ID --vpc-id $VPC_ID
+> RT_ID=$(aws ec2 describe-route-tables --filters Name=vpc-id,Values=$VPC_ID Name=association.main,Values=true \
+>   --query 'RouteTables[0].RouteTableId' --output text)
+> aws ec2 replace-route --route-table-id $RT_ID --destination-cidr-block 0.0.0.0/0 --gateway-id $IGW_ID
+> ```
+
 **Cleanup Fargate:**
 
 ```bash
