@@ -1,22 +1,31 @@
 #!/usr/bin/env bash
 # =============================================================================
-# semana-06-servidores-subir.sh — Semana 6 · Aula 12 — sobe os 3 servidores (API, Frontend, Grafana) no AWS
-# Academy/Learner Lab usando SOMENTE a AWS CLI (sem CDK, sem CloudFormation).
+# semana-06-servidores-subir.sh — Semana 6 · Aula 12 — sobe os 3 servidores
+# (Edge/Caddy + API + Grafana) no AWS Academy, com HTTPS válido e Swagger com senha.
 # -----------------------------------------------------------------------------
-# É o caminho "rápido e didático": cada servidor é um EC2 na VPC default, com o
-# LabInstanceProfile já existente (a role do laboratório) — por isso nada de
-# criar IAM. O frontend recebe, no boot, a URL pública da API.
+# Arquitetura (tudo só por HTTPS; o navegador só fala com o Edge):
 #
-#   API      : EC2 t3.small  — Docker (Postgres + API)        porta 8000
-#   Frontend : EC2 t3.micro  — nginx servindo o SPA           porta 80
-#   Grafana  : EC2 t3.small  — Grafana + datasource CloudWatch porta 3000
+#   navegador ──HTTPS──► EDGE (Caddy)  ──HTTP interno──►  API   (:8000, Docker)
+#   (443)                <ip>.sslip.io  ├─ /api/*      ──►  Grafana (:3000)
+#                        serve o SPA    └─ /grafana/*
 #
-# USO (com o Learner Lab "Start" e as credenciais já no ~/.aws):
+#   * **Edge/Caddy** tem um **Elastic IP** e usa o hostname `<ip>.sslip.io`.
+#     O Caddy obtém sozinho um **certificado válido** (Let's Encrypt, com
+#     fallback ZeroSSL) — sem domínio próprio. Redireciona 80→443.
+#   * **API** e **Grafana** NÃO ficam expostos à internet nas portas 8000/3000:
+#     só o Edge os alcança (mesma security group). Acaba o "conteúdo misto" e o
+#     acesso HTTP direto — tudo passa pelo Edge em HTTPS.
+#   * **Swagger** (`/api/docs`, `/api/openapi.json`, `/api/redoc`) fica atrás de
+#     **senha** (HTTP Basic no Caddy: admin / ADMIN_PASSWORD).
+#
+# USO (na raiz do repo, Learner Lab iniciado):
 #   bash infra/servers/semana-06-servidores-subir.sh
+# Derrubar:  bash infra/servers/semana-06-servidores-destruir.sh
 #
-# Derrubar tudo depois:  bash infra/servers/semana-06-servidores-destruir.sh
-#
-# Pré-requisitos: aws cli, gzip e base64 no PATH (Git Bash no Windows já tem).
+# OBS sobre "cert válido sem domínio": usamos sslip.io (mapeia o IP no hostname)
+# para o ACME validar. Se o Let's Encrypt/ZeroSSL estiver com rate-limit, o
+# Caddy pode demorar ou cair num cert próprio (aviso no navegador) — nesse caso
+# rode de novo mais tarde ou use um domínio real.
 # =============================================================================
 set -euo pipefail
 
@@ -32,43 +41,37 @@ FRONT_HTML="$HERE/../../frontend/index.html"
 
 echo "==> Região: $REGION"
 
-# --- AMI Amazon Linux 2023 (mais recente) ------------------------------------
 AMI=$(aws ec2 describe-images --region "$REGION" --owners amazon \
   --filters "Name=name,Values=al2023-ami-2023.*-kernel-6.1-x86_64" "Name=state,Values=available" \
   --query 'reverse(sort_by(Images,&CreationDate))[0].ImageId' --output text)
-echo "==> AMI AL2023: $AMI"
+VPC=$(aws ec2 describe-vpcs --region "$REGION" --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
+SUBNET=$(aws ec2 describe-subnets --region "$REGION" --filters Name=vpc-id,Values="$VPC" Name=default-for-az,Values=true --query 'Subnets[0].SubnetId' --output text)
+echo "==> AMI: $AMI  VPC: $VPC  Subnet: $SUBNET"
 
-# --- VPC default + subnet pública --------------------------------------------
-VPC=$(aws ec2 describe-vpcs --region "$REGION" --filters Name=isDefault,Values=true \
-  --query 'Vpcs[0].VpcId' --output text)
-SUBNET=$(aws ec2 describe-subnets --region "$REGION" \
-  --filters Name=vpc-id,Values="$VPC" Name=default-for-az,Values=true \
-  --query 'Subnets[0].SubnetId' --output text)
-echo "==> VPC: $VPC  Subnet: $SUBNET"
-
-# --- Security Group (reaproveita se já existir) ------------------------------
+# --- Security Group: 22/80/443 do mundo; 8000/3000 só DENTRO do grupo ---------
 SG=$(aws ec2 describe-security-groups --region "$REGION" \
   --filters Name=group-name,Values="$SG_NAME" Name=vpc-id,Values="$VPC" \
   --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "None")
 if [ "$SG" = "None" ] || [ -z "$SG" ]; then
   SG=$(aws ec2 create-security-group --region "$REGION" --group-name "$SG_NAME" \
     --description "CloudTask demo (Aula 12)" --vpc-id "$VPC" --query 'GroupId' --output text)
-  for p in 22 80 3000 8000; do
+  for p in 22 80 443; do
     aws ec2 authorize-security-group-ingress --region "$REGION" --group-id "$SG" \
       --protocol tcp --port "$p" --cidr 0.0.0.0/0 >/dev/null
   done
-  echo "==> SG criado: $SG (22,80,3000,8000)"
+  # API/Grafana só acessíveis de dentro do grupo (o Edge alcança; o mundo não).
+  for p in 8000 3000; do
+    aws ec2 authorize-security-group-ingress --region "$REGION" --group-id "$SG" \
+      --protocol tcp --port "$p" --source-group "$SG" >/dev/null
+  done
+  echo "==> SG criado: $SG"
 else
   echo "==> SG reaproveitado: $SG"
 fi
 
-# file:// que a AWS CLI lê em qualquer SO. No Git Bash (Windows) a CLI é nativa
-# e não entende paths MSYS (/tmp/...); o cygpath converte para F:/... .
-udurl () {
-  if command -v cygpath >/dev/null 2>&1; then echo "file://$(cygpath -m "$1")"; else echo "file://$1"; fi
-}
+udurl () { if command -v cygpath >/dev/null 2>&1; then echo "file://$(cygpath -m "$1")"; else echo "file://$1"; fi; }
 
-run_instance () {  # $1=name $2=type $3=userdata-file
+run_instance () {  # $1=name $2=type $3=userdata-file -> ecoa InstanceId
   aws ec2 run-instances --region "$REGION" \
     --image-id "$AMI" --instance-type "$2" --key-name "$KEY_NAME" \
     --iam-instance-profile "Name=$PROFILE_NAME" \
@@ -77,70 +80,110 @@ run_instance () {  # $1=name $2=type $3=userdata-file
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$1},{Key=project,Value=$TAG}]" \
     --query 'Instances[0].InstanceId' --output text
 }
+priv_ip () { aws ec2 describe-instances --region "$REGION" --instance-ids "$1" --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text; }
+
+# --- Elastic IP (define o hostname sslip.io ANTES de subir o Edge) ------------
+EIP_ALLOC=$(aws ec2 allocate-address --region "$REGION" --domain vpc \
+  --tag-specifications "ResourceType=elastic-ip,Tags=[{Key=project,Value=$TAG}]" \
+  --query 'AllocationId' --output text)
+EIP=$(aws ec2 describe-addresses --region "$REGION" --allocation-ids "$EIP_ALLOC" --query 'Addresses[0].PublicIp' --output text)
+HOST="$(echo "$EIP" | tr '.' '-').sslip.io"
+echo "==> Elastic IP: $EIP   Host HTTPS: $HOST"
 
 # --- API ---------------------------------------------------------------------
 UD_API="$(mktemp)"
-{
-  echo '#!/bin/bash'
-  echo "export ADMIN_PASSWORD='$ADMIN_PASSWORD'"
-  echo "export SECRET_KEY='$SECRET_KEY'"
-  tail -n +2 "$HERE/userdata-api.sh"
-} > "$UD_API"
+{ echo '#!/bin/bash'; echo "export ADMIN_PASSWORD='$ADMIN_PASSWORD'"; echo "export SECRET_KEY='$SECRET_KEY'"; tail -n +2 "$HERE/userdata-api.sh"; } > "$UD_API"
 API_ID=$(run_instance cloudtask-api t3.small "$UD_API")
-echo "==> API instance: $API_ID (aguardando IP público...)"
-aws ec2 wait instance-running --region "$REGION" --instance-ids "$API_ID"
-API_DNS=$(aws ec2 describe-instances --region "$REGION" --instance-ids "$API_ID" \
-  --query 'Reservations[0].Instances[0].PublicDnsName' --output text)
-echo "==> API DNS: $API_DNS"
+echo "==> API: $API_ID"
 
-# --- Frontend (recebe a URL da API e o HTML embutido) ------------------------
+# --- Grafana (subpath /grafana + dashboard como home) ------------------------
+DASH_B64=$(base64 -w0 "$HERE/grafana-dashboard.json")
+UD_GRAF="$(mktemp)"
+{ echo '#!/bin/bash'; echo "export ADMIN_PASSWORD='$ADMIN_PASSWORD'"; echo "export REGION='$REGION'"; echo "export DASH_B64='$DASH_B64'"; echo "export ROOT_URL='https://$HOST/grafana/'"; tail -n +2 "$HERE/userdata-grafana.sh"; } > "$UD_GRAF"
+GRAF_ID=$(run_instance cloudtask-grafana t3.small "$UD_GRAF")
+echo "==> Grafana: $GRAF_ID"
+
+aws ec2 wait instance-running --region "$REGION" --instance-ids "$API_ID" "$GRAF_ID"
+API_IP=$(priv_ip "$API_ID"); GRAF_IP=$(priv_ip "$GRAF_ID")
+echo "==> IPs privados — API: $API_IP  Grafana: $GRAF_IP"
+
+# --- Edge (Caddy: TLS + SPA + proxy) -----------------------------------------
 HTML_B64=$(gzip -c "$FRONT_HTML" | base64 -w0)
-UD_FRONT="$(mktemp)"
-cat > "$UD_FRONT" <<FRONT
+UD_EDGE="$(mktemp)"
+cat > "$UD_EDGE" <<EDGE
 #!/bin/bash
 set -xe
-dnf install -y nginx
+CADDY_VER=2.8.4
+curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v\${CADDY_VER}/caddy_\${CADDY_VER}_linux_amd64.tar.gz" -o /tmp/caddy.tgz
+tar -xzf /tmp/caddy.tgz -C /usr/local/bin caddy
+mkdir -p /etc/caddy /srv/cloudtask /var/lib/caddy
+# SPA (embutido, gzip+base64) com a base da API = /api (mesma origem)
 cat > /tmp/site.gz.b64 <<'B64'
 $HTML_B64
 B64
-base64 -d /tmp/site.gz.b64 | gunzip > /usr/share/nginx/html/index.html
-sed -i 's#__API_BASE__#http://$API_DNS:8000#' /usr/share/nginx/html/index.html
-systemctl enable --now nginx
-echo "frontend up on :80"
-FRONT
-FRONT_ID=$(run_instance cloudtask-frontend t3.micro "$UD_FRONT")
-echo "==> Frontend instance: $FRONT_ID"
-
-# --- Grafana -----------------------------------------------------------------
-DASH_B64=$(base64 -w0 "$HERE/grafana-dashboard.json")
-UD_GRAF="$(mktemp)"
+base64 -d /tmp/site.gz.b64 | gunzip > /srv/cloudtask/index.html
+sed -i 's#__API_BASE__#/api#' /srv/cloudtask/index.html
+# senha do Swagger (bcrypt gerado aqui; vai por env p/ o '\$' do hash não quebrar)
+HASH=\$(/usr/local/bin/caddy hash-password --plaintext '$ADMIN_PASSWORD')
+printf 'CLOUDTASK_HASH=%s\n' "\$HASH" > /etc/caddy/caddy.env
+cat > /etc/caddy/Caddyfile <<'CADDY'
 {
-  echo '#!/bin/bash'
-  echo "export ADMIN_PASSWORD='$ADMIN_PASSWORD'"
-  echo "export REGION='$REGION'"
-  echo "export DASH_B64='$DASH_B64'"
-  tail -n +2 "$HERE/userdata-grafana.sh"
-} > "$UD_GRAF"
-GRAF_ID=$(run_instance cloudtask-grafana t3.small "$UD_GRAF")
-echo "==> Grafana instance: $GRAF_ID"
+    email admin@cloudtask.local
+}
+__HOST__ {
+    encode gzip
+    handle_path /api/* {
+        @docs path /docs /redoc /openapi.json
+        basic_auth @docs {
+            admin {\$CLOUDTASK_HASH}
+        }
+        reverse_proxy __APIIP__:8000
+    }
+    handle /grafana/* {
+        reverse_proxy __GRAFIP__:3000
+    }
+    handle {
+        root * /srv/cloudtask
+        try_files {path} /index.html
+        file_server
+    }
+}
+CADDY
+sed -i "s#__HOST__#$HOST#; s#__APIIP__#$API_IP#; s#__GRAFIP__#$GRAF_IP#" /etc/caddy/Caddyfile
+cat > /etc/systemd/system/caddy.service <<'UNIT'
+[Unit]
+Description=Caddy
+After=network-online.target
+Wants=network-online.target
+[Service]
+EnvironmentFile=/etc/caddy/caddy.env
+ExecStart=/usr/local/bin/caddy run --config /etc/caddy/Caddyfile
+Restart=on-failure
+LimitNOFILE=1048576
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now caddy
+echo "edge up"
+EDGE
+EDGE_ID=$(run_instance cloudtask-edge t3.small "$UD_EDGE")
+echo "==> Edge: $EDGE_ID (associando Elastic IP...)"
+aws ec2 wait instance-running --region "$REGION" --instance-ids "$EDGE_ID"
+aws ec2 associate-address --region "$REGION" --instance-id "$EDGE_ID" --allocation-id "$EIP_ALLOC" >/dev/null
 
-# --- IPs públicos finais -----------------------------------------------------
-aws ec2 wait instance-running --region "$REGION" --instance-ids "$FRONT_ID" "$GRAF_ID"
-get_ip () { aws ec2 describe-instances --region "$REGION" --instance-ids "$1" \
-  --query 'Reservations[0].Instances[0].PublicIpAddress' --output text; }
-API_IP=$(get_ip "$API_ID"); FRONT_IP=$(get_ip "$FRONT_ID"); GRAF_IP=$(get_ip "$GRAF_ID")
-
-rm -f "$UD_API" "$UD_FRONT" "$UD_GRAF"
+rm -f "$UD_API" "$UD_GRAF" "$UD_EDGE"
 
 cat <<EOF
 
 ============================================================
-  CloudTask AI SaaS — servidores no ar (leva ~3-5 min p/ bootar)
+  CloudTask AI SaaS — HTTPS no ar (cert leva ~1-3 min após boot)
 ------------------------------------------------------------
-  Frontend (abra este):  http://$FRONT_IP/
-  API (Swagger):         http://$API_IP:8000/docs
-  Grafana:               http://$GRAF_IP:3000/   (admin / $ADMIN_PASSWORD)
+  App (abra este):   https://$HOST/
+  Swagger (c/ senha):https://$HOST/api/docs     (admin / $ADMIN_PASSWORD)
+  Grafana:           https://$HOST/grafana/     (admin / $ADMIN_PASSWORD)
 
-  Login do app:          admin / $ADMIN_PASSWORD
+  Login do app:      admin / $ADMIN_PASSWORD
+  (HTTP redireciona para HTTPS; API/Grafana não ficam expostos direto.)
 ============================================================
 EOF

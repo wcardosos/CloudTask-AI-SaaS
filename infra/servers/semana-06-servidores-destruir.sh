@@ -21,6 +21,13 @@ else
   echo "==> Nenhuma instância com tag project=cloudtask-demo."
 fi
 
+# Elastic IPs da demo (libera para não cobrar EIP ocioso).
+for alloc in $(aws ec2 describe-addresses --region "$REGION" \
+    --filters Name=tag:project,Values=cloudtask-demo \
+    --query 'Addresses[].AllocationId' --output text); do
+  aws ec2 release-address --region "$REGION" --allocation-id "$alloc" && echo "==> EIP $alloc liberado."
+done
+
 # O SG só pode ser apagado depois que as instâncias somem.
 SG=$(aws ec2 describe-security-groups --region "$REGION" \
   --filters Name=group-name,Values="$SG_NAME" \

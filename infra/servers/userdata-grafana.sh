@@ -15,12 +15,15 @@
 #   REGION           região das métricas (default us-east-1)
 #   DASH_B64         dashboard json (base64). Se vazio, sobe sem dashboard
 #                    pré-carregado (datasource CloudWatch continua disponível).
+#   ROOT_URL         se setada (ex.: https://host/grafana/), serve o Grafana sob
+#                    subcaminho (atrás do proxy HTTPS do Edge).
 # =============================================================================
 set -xe
 
 : "${ADMIN_PASSWORD:=admin#123}"
 : "${REGION:=us-east-1}"
 : "${DASH_B64:=}"
+: "${ROOT_URL:=}"
 
 # Repositório oficial do Grafana (RPM).
 cat > /etc/yum.repos.d/grafana.repo <<'REPO'
@@ -72,6 +75,16 @@ chown -R grafana:grafana /var/lib/grafana/dashboards
 # caractere '#' inicia comentário e truncaria "admin#123" em "admin". O systemd
 # lê /etc/sysconfig/grafana-server como EnvironmentFile, onde o '#' é literal.
 echo "GF_SECURITY_ADMIN_PASSWORD=${ADMIN_PASSWORD}" >> /etc/sysconfig/grafana-server
+
+# Dashboard provisionado vira a HOME -> abre já mostrando um painel pronto
+# (resolve "não aparece nenhum dashboard").
+echo "GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/cloudtask.json" >> /etc/sysconfig/grafana-server
+
+# Atrás do proxy HTTPS do Edge: serve sob /grafana/ com a URL pública correta.
+if [ -n "$ROOT_URL" ]; then
+  echo "GF_SERVER_ROOT_URL=${ROOT_URL}"        >> /etc/sysconfig/grafana-server
+  echo "GF_SERVER_SERVE_FROM_SUB_PATH=true"    >> /etc/sysconfig/grafana-server
+fi
 
 systemctl enable --now grafana-server
 echo "Grafana up on :3000 (admin / ${ADMIN_PASSWORD})"
