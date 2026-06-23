@@ -83,9 +83,10 @@ App  (cdk.App())
 │   └── PostgresDb         (rds.DatabaseInstance)
 └── CloudTaskCompute      (Stack)
     ├── DemoSg             (ec2.SecurityGroup)
+    ├── EdgeEip            (ec2.CfnEIP)
     ├── cloudtask-api      (ec2.CfnInstance)
-    ├── cloudtask-frontend (ec2.CfnInstance)
-    └── cloudtask-grafana  (ec2.CfnInstance)
+    ├── cloudtask-grafana  (ec2.CfnInstance)
+    └── cloudtask-edge     (ec2.CfnInstance — Caddy: HTTPS + proxy + SPA)
 ```
 
 Cada **Stack** vira **um template** CloudFormation separado (e um "stack" no
@@ -115,19 +116,25 @@ Abra cada um enquanto lê — **os comentários no código explicam linha a linh
 
 ### a) **Tokens** — valores que só existem no deploy
 
-Quando você escreve `bucket.bucket_name` ou `api.attr_public_dns_name`, o valor
+Quando você escreve `bucket.bucket_name` ou `api.attr_private_ip`, o valor
 **ainda não existe** (o recurso nem foi criado). O CDK devolve um **token**: um
 marcador que, no `synth`, vira a referência certa no CloudFormation
 (`Ref`/`Fn::GetAtt`).
 
-No `compute_stack.py` usamos isso para injetar a URL da API no frontend:
+No `compute_stack.py` usamos tokens para montar o **hostname** a partir do
+Elastic IP (que só existe no deploy) e para passar o **IP privado** da API ao
+proxy do Edge (Caddy):
 
 ```python
-f"sed -i 's#__API_BASE__#http://{api.attr_public_dns_name}:8000#' ..."
+# hostname <ip-com-traços>.sslip.io a partir do IP do EIP:
+host = Fn.join("", [Fn.join("-", Fn.split(".", eip.ref)), ".sslip.io"])
+# IP privado da API injetado na config do Caddy do Edge:
+edge_script = _EDGE_TEMPLATE.replace("@@APIIP@@", api.attr_private_ip)
 ```
 
-Mesmo dentro de uma f-string, o token "sobrevive" e o CDK o resolve na hora do
-synth. É como o frontend descobre o endereço da API **sem você digitar IP**.
+Nenhum desses valores existe quando você escreve o Python — são **tokens** que o
+CDK resolve no synth (viram `Ref`/`Fn::GetAtt`/`Fn::Join`). É como o Edge
+descobre o endereço da API e o hostname do certificado **sem você digitar IP**.
 
 ### b) **CfnOutput** — as saídas
 
@@ -192,7 +199,7 @@ do *code review* de infra.
 
 Repare na evolução desta disciplina: **console → CLI → script → IaC**. Com uma
 VM só, qualquer abordagem serve. Mas a infra final tem **7 stacks** e **3
-servidores** (API, Frontend, Grafana) — e aí a diferença aparece:
+servidores** (Edge HTTPS + API + Grafana) — e aí a diferença aparece:
 
 * **Um comando** sobe/derruba tudo, na ordem certa, com as dependências
   resolvidas. Na mão, seriam dezenas de cliques/comandos sem garantia de ordem.
@@ -201,12 +208,13 @@ servidores** (API, Frontend, Grafana) — e aí a diferença aparece:
 * **Reproduzível** → roda igual na sua conta, na do colega e amanhã de novo.
 * **Destrói junto** → sem recurso órfão esquecido cobrando.
 
-> 🧩 **Por que adicionamos o frontend num servidor próprio?** Não era estritamente
-> necessário para a aplicação funcionar — adicionamos de propósito para a infra
-> ter **mais uma peça** (mais um EC2, mais um security group, mais uma URL). É
-> assim que se enxerga o **ganho do CDK**: quanto **mais complexa** a topologia,
-> mais valor tem descrevê-la como código em vez de clicar. Gerenciar 3 servidores
-> + RDS + VPC + observabilidade na mão é frágil; em CDK é um `deploy`/`destroy`.
+> 🧩 **Por que separar em vários servidores?** Não era estritamente necessário
+> para a aplicação funcionar — separamos de propósito (**Edge HTTPS + API +
+> Grafana**) para a infra ter **mais peças** (mais EC2, security group, Elastic
+> IP, certificado, URLs). É assim que se enxerga o **ganho do CDK**: quanto
+> **mais complexa** a topologia, mais valor tem descrevê-la como código em vez de
+> clicar. Gerenciar 3 servidores + RDS + VPC + observabilidade na mão é frágil;
+> em CDK é um `deploy`/`destroy`.
 
 ---
 

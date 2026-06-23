@@ -13,8 +13,9 @@
 > [`../conceitos/s3-efs-datalake.md`](../conceitos/s3-efs-datalake.md).
 >
 > ⚠️ **Custo:** `cdk synth` é **grátis** (só gera arquivo). `cdk deploy` cria
-> recursos de verdade — S3/ECR são centavos; a VPC vem **sem NAT** (sem custo).
-> Sempre `cdk destroy` ao terminar.
+> recursos de verdade — S3/ECR/VPC são centavos (a VPC vem **sem NAT**), mas a
+> stack **Database (RDS)** e a **Compute (3 EC2)** cobram por hora. Sempre
+> `cdk destroy` ao terminar.
 >
 > 🔎 **Quer entender por dentro** (como Python vira CloudFormation, o que é um
 > *construct*, tokens, L1 vs L2)? Veja a
@@ -53,11 +54,14 @@ infra/cdk/
     ├── network_stack.py        ← VPC 2 AZs (sem NAT)
     ├── events_stack.py         ← tabela DynamoDB (eventos/logs)
     ├── observability_stack.py  ← CloudWatch Log Group + Dashboard + Alarme + SNS
-    └── database_stack.py       ← RDS PostgreSQL + Secrets Manager (⚠️ cobra/lento)
+    ├── database_stack.py       ← RDS PostgreSQL + Secrets Manager (⚠️ cobra/lento)
+    └── compute_stack.py        ← 3 EC2 (Edge/Caddy HTTPS + API + Grafana) — Aula 12
 ```
 
-São **6 stacks** que recriam, como código, a infra das 6 semanas. Todas **sem
-assets** (sem Lambda) — por isso sobem no Academy sem `cdk bootstrap`.
+São **7 stacks**: as 6 primeiras recriam, como código, a infra das semanas
+anteriores; a 7ª (**`compute_stack.py`**) sobe os **3 servidores** da entrega
+final (Edge HTTPS + API + Grafana — ver [prática 19](19-servidores-ec2-grafana.md)).
+Todas **sem assets** (sem Lambda) — por isso sobem no Academy sem `cdk bootstrap`.
 
 Leia os comentários de cada `stack` — explicam **por que** cada propriedade
 existe (segurança, custo, limpeza).
@@ -96,8 +100,9 @@ cdk synth CloudTaskStorage
 cdk ls
 ```
 
-✅ **Checkpoint 1:** `cdk synth` imprime um template e `cdk ls` lista
-`CloudTaskStorage`, `CloudTaskEcr`, `CloudTaskNetwork`.
+✅ **Checkpoint 1:** `cdk synth` imprime um template e `cdk ls` lista as **7**
+stacks (`CloudTaskStorage`, `CloudTaskEcr`, `CloudTaskNetwork`, `CloudTaskEvents`,
+`CloudTaskObservability`, `CloudTaskDatabase`, `CloudTaskCompute`).
 
 ---
 
@@ -118,18 +123,19 @@ Tem um script que faz tudo:
 
 ```bash
 cd infra/cdk
-pip install -r requirements.txt        # uma vez
+# (as libs do CDK são instaladas pelo post-create; o script também garante)
 ./semana-06-cdk-deploy.sh deploy                 # synth + cloudformation deploy (LabRole)
-# ... use os recursos ...
-./semana-06-cdk-deploy.sh destroy                # 🔥 apaga as 3 stacks
+# ... no fim ele imprime os LINKS dos serviços + o TOKEN do Swagger ...
+./semana-06-cdk-deploy.sh destroy                # 🔥 apaga as 7 stacks
 ```
 
-Ou, **manualmente** (o que o script faz por dentro):
+Ou, **manualmente** (o que o script faz por dentro) — na ordem das dependências:
 
 ```bash
 cdk synth                               # gera cdk.out/*.template.json
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-for s in CloudTaskStorage CloudTaskEcr CloudTaskNetwork; do
+for s in CloudTaskNetwork CloudTaskStorage CloudTaskEcr CloudTaskEvents \
+         CloudTaskObservability CloudTaskDatabase CloudTaskCompute; do
   aws cloudformation deploy \
     --template-file cdk.out/$s.template.json \
     --stack-name $s \
@@ -138,14 +144,19 @@ for s in CloudTaskStorage CloudTaskEcr CloudTaskNetwork; do
 done
 ```
 
+> O `deploy` sobe **tudo**, inclusive os **3 servidores** (Edge HTTPS + API +
+> Grafana, a 7ª stack) — o mesmo que o script CLI da
+> [prática 19](19-servidores-ec2-grafana.md), só que como IaC.
+
 ### 5B. 🔵 Conta própria — `cdk deploy` clássico
 
 ```bash
 cdk bootstrap                 # uma vez por conta/região
-cdk deploy --all              # cria S3 + ECR + VPC (sem NAT = sem custo)
+cdk deploy --all              # cria as 7 stacks (S3, ECR, VPC, DynamoDB,
+                              # CloudWatch, RDS e os 3 servidores)
 ```
-> O `semana-06-cdk-deploy.sh` também funciona em conta própria (ele só usa a LabRole se
-> ela existir).
+> O `semana-06-cdk-deploy.sh` também funciona em conta própria (ele só usa a LabRole
+> se ela existir). ⚠️ Aqui o **RDS** e os **3 EC2** cobram por hora — `destroy` ao fim.
 
 ### 5.3. Conferir
 
