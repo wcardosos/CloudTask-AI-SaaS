@@ -191,6 +191,26 @@ pytest -v
 credenciais reais ou LocalStack); validar manualmente.
 
 ## Como subir na AWS (resumo)
+> ⚠️ **Ao mudar de semana (branch), faça REBUILD do devcontainer.**
+> A imagem do container é um snapshot congelado das dependências da branch em
+> que foi construída. Cada semana acrescenta libs novas em `requirements.txt`.
+> Sem rebuild, o `uvicorn` quebra com `ModuleNotFoundError` ao importar uma lib
+> que ainda não foi instalada e o Swagger sai do ar.
+>
+> No VS Code: `F1` → **Dev Containers: Rebuild and Reopen in Container**.
+>
+> Para saber se precisa rebuild antes de trocar de branch:
+> ```bash
+> git diff <branch-atual> <branch-destino> -- requirements.txt requirements-dev.txt requirements-test.txt Dockerfile docker-compose.yml
+> ```
+> Se mostrar diff → rebuild. Entre **aulas da mesma semana**, geralmente
+> código apenas — não precisa rebuild.
+
+**Nunca usou terminal, Docker ou AWS?** Comece pelo guia do absoluto zero —
+instalação de todas as ferramentas e configuração do AWS Academy Learner Lab:
+[`docs/praticas/00-setup-inicial-e-aws-academy.md`](docs/praticas/00-setup-inicial-e-aws-academy.md).
+
+Resumo:
 
 ```bash
 # 1. credenciais Learner Lab no host (~/.aws/credentials)
@@ -223,6 +243,44 @@ cdk synth                 # gera o CloudFormation sem criar nada
 cdk deploy --all          # (conta própria) cria S3 + ECR + VPC
 cdk destroy --all         # 🔥 apaga tudo
 ```
+Cada branch `aula-XX-final` contém **somente o estado acumulado até aquela aula** e funciona de forma independente.
+
+## Participantes
+
+| [<img src="https://avatars3.githubusercontent.com/u/60905310?s=460&v=4" width="75px;"/>](https://github.com/guipatriota) |
+| :------------------------------------------------------------------------------------------------------------------------: |
+| [Prof. Guilherme Patriota](https://github.com/guipatriota) |
+
+## Estrutura final do projeto (referência — aula 12)
+
+```text
+cloudtask-ai-saas/
+├── app/
+│   ├── main.py
+│   ├── core/            # config, security
+│   ├── api/             # routes_health, routes_tasks, routes_uploads, routes_events
+│   ├── db/              # database, models, schemas
+│   ├── services/        # s3_service, dynamodb_service, task_service
+│   └── utils/           # logging
+├── infra/
+│   ├── docker/
+│   ├── k8s/             # local + aws/
+│   └── cdk/             # stacks S3, ECR, VPC
+├── scripts/             # build-and-push-ecr.sh, load-test
+├── tests/
+├── docs/                # ROADMAP, HOW_TO_USE, arquitetura, LGPD, etc.
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── .env.example
+└── README.md
+```
+
+> Em branches anteriores à aula 12, só existem as pastas e arquivos correspondentes ao conteúdo já visto.
+
+## Contribuições
+
+Se você tiver alguma sugestão, correção de bugs ou melhorias para este projeto didático, sinta-se à vontade para abrir uma issue ou enviar uma pull request. Sua contribuição é muito bem-vinda!
 
 Entrega final: preencha [`docs/entrega-final/final-report-template.md`](docs/entrega-final/final-report-template.md)
 e rode os checklists de [LGPD](docs/entrega-final/lgpd-checklist.md) e
