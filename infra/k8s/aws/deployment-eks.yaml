@@ -54,7 +54,7 @@ spec:
       containers:
         - name: api
           # ▼▼▼ TROQUE <ACCOUNT> e a região se necessário ▼▼▼
-          image: <ACCOUNT>.dkr.ecr.us-east-1.amazonaws.com/cloudtask-api:latest
+          image: 590396427289.dkr.ecr.us-east-1.amazonaws.com/cloudtask-api:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

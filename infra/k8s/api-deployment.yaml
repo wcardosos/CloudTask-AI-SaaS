@@ -59,6 +59,18 @@ spec:
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef: { name: cloudtask-secrets, key: POSTGRES_USER }
+        - name: fetch-secrets
+          image: amazon/aws-cli:latest
+          command:
+            - sh
+            - -c
+            - |
+              aws secretsmanager get-secret-value \
+                --secret-id cloudtask/prod \
+                --query SecretString --output text > /env/.env
+          volumeMounts:
+            - name: env-vol
+              mountPath: /env
       containers:
         - name: api
           image: cloudtask-api:prod

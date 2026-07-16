@@ -1163,10 +1163,13 @@ aws rds create-db-instance \
   --engine postgres \
   --engine-version 16.3 \
   --master-username cloudtask \
-  --master-user-password "$(openssl rand -hex 16)" \
+  --master-user-password $DB_PASS \
   --allocated-storage 20 \
   --vpc-security-group-ids $RDS_SG \
+  --db-subnet-group-name cloudtask-subnet-group \
   --db-name cloudtask \
+  --storage-encrypted \
+  --backup-retention-period 7 \
   --no-publicly-accessible
 
 # aguardar (~8 min)

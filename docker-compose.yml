@@ -35,6 +35,13 @@ services:
     volumes:
       - .:/app:cached                     # hot-reload: editar no host reflete aqui
       - api-pip-cache:/home/appuser/.cache/pip
+    # Injeta as variáveis do .env como env vars REAIS do processo. O boto3 (S3)
+    # NÃO lê o .env — só enxerga variáveis de ambiente / ~/.aws / IAM Role. Sem
+    # isto, AWS_ACCESS_KEY_ID/SECRET não chegam ao container e o S3 dá
+    # "Unable to locate credentials". O bloco `environment:` abaixo tem
+    # prioridade sobre o env_file em caso de chave repetida (ex.: DATABASE_URL).
+    env_file:
+      - .env
     environment:
       APP_ENV: development
       APP_PORT: "8000"
